@@ -763,7 +763,7 @@ async function initThree() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 1.18;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.className = 'r3d';
@@ -795,16 +795,7 @@ async function initThree() {
       s.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
       return tex;
     }
-    scene.environment = buildStudioEnv();   // immediate procedural fallback
-    // Upgrade to a real studio HDRI — crisp, varied reflections are what make paint read as
-    // real instead of "paper". PMREM-prefiltered so it works across roughness levels.
-    try {
-      const { RGBELoader } = await import('three/addons/loaders/RGBELoader.js');
-      const hdr = await new Promise((res, rej) => new RGBELoader().load('hdr/studio-1k.hdr', res, undefined, rej));
-      hdr.mapping = THREE.EquirectangularReflectionMapping;
-      scene.environment = pmrem.fromEquirectangular(hdr).texture;
-      hdr.dispose();
-    } catch (e) { console.warn('HDRI env failed; using procedural studio', e); }
+    scene.environment = buildStudioEnv();
 
     // premium dark studio backdrop (vertical gradient, opaque)
     scene.background = (() => {
@@ -815,8 +806,8 @@ async function initThree() {
       const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
     })();
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.2));
-    const key = new THREE.DirectionalLight(0xffffff, 1.8);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const key = new THREE.DirectionalLight(0xffffff, 2.3);
     key.position.set(5, 9, 5); key.castShadow = true;
     key.shadow.mapSize.set(isMobile ? 1024 : 2048, isMobile ? 1024 : 2048);
     key.shadow.camera.near = 1; key.shadow.camera.far = 40;
@@ -844,18 +835,15 @@ async function initThree() {
         alphaMap: src.alphaMap || null, side: src.side,
       });
       if (src.normalScale && p.normalScale) p.normalScale.copy(src.normalScale);
-      p.envMapIntensity = 2.0;
-      // Every model here is a car — always apply clearcoat. The AI material reports matte
-      // (roughness~1), so gating on it left the paint flat ("paper"). Clamp roughness for gloss.
-      p.clearcoat = 1.0; p.clearcoatRoughness = 0.05;
-      if ((p.roughness ?? 1) > 0.45) p.roughness = 0.35;
+      p.envMapIntensity = 1.85;
+      if (glossy) { p.clearcoat = 1.0; p.clearcoatRoughness = 0.08; if (p.roughness > 0.5) p.roughness = 0.4; }
       if (src.dispose) src.dispose();
       return p;
     }
 
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(80, 80),
-      new THREE.MeshStandardMaterial({ color: 0x080b0c, metalness: 0.4, roughness: 0.55, envMapIntensity: 0.25 })
+      new THREE.MeshStandardMaterial({ color: 0x0a0e0f, metalness: 0.65, roughness: 0.34 })
     );
     floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 
