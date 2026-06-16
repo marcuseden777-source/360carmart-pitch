@@ -1,0 +1,6 @@
+_src/
+*-hd.glb
+/front.glb
+/back.glb
+.DS_Store
+*.log
