@@ -369,7 +369,7 @@ svg.i{width:20px;height:20px;stroke:currentColor;stroke-width:1.7;fill:none;stro
 <main id="deck">
 
   <!-- 1 · COVER -->
-  <section class="slide cover is-active" data-label="Cover" data-car="ferrarif8">
+  <section class="slide cover is-active" data-label="Cover" data-car="ferrari">
     <div class="stage-host" data-stage>
       <img class="stage-fallback" src="images/cars/ferrari-roma-2022.jpg" alt="Ferrari Roma" />
       <div class="stage-spin"><div><span class="ring"></span><span>Preparing the showroom…</span></div></div>
@@ -646,7 +646,7 @@ const bar = document.getElementById('bar');
 const cnum = document.getElementById('cnum');
 const ctot = document.getElementById('ctot');
 let idx = 0;
-let curCar = 'ferrarif8';
+let curCar = 'ferrari';
 
 const CARS = {
   ferrarif8:    { name:'Ferrari F8 Spider',   sub:'2020 · 3.9 V8 · multi-view capture', price:'S$1,288,000', url:'models/ferrari-f8-multiview-clean.glb' },
@@ -679,6 +679,23 @@ function applyCaption(slide) {
   slide.querySelectorAll('[data-pick]').forEach(b => b.classList.toggle('on', b.dataset.pick === curCar));
 }
 
+/* Cover hero: auto-cycle through the clean scans every 5s (F8 excluded — it scanned poorly). */
+const COVER_ROTATION = ['ferrari', 'lamborghini', 'porsche', 'ioniq'];
+let coverTimer = null;
+function stopCoverCycle() { if (coverTimer) { clearInterval(coverTimer); coverTimer = null; } }
+function startCoverCycle() {
+  stopCoverCycle();
+  const showCover = () => { const cv = document.querySelector('.slide.cover'); if (cv) applyCaption(cv); };
+  let r = COVER_ROTATION.indexOf(curCar);
+  if (r < 0) { r = 0; curCar = COVER_ROTATION[0]; if (window.__stage) window.__stage.load(curCar); showCover(); }
+  coverTimer = setInterval(() => {
+    r = (r + 1) % COVER_ROTATION.length;
+    curCar = COVER_ROTATION[r];
+    if (window.__stage) window.__stage.load(curCar);
+    showCover();
+  }, 5000);
+}
+
 function go(i) {
   i = Math.max(0, Math.min(slides.length - 1, i));
   idx = i;
@@ -695,6 +712,8 @@ function go(i) {
   } else if (window.__stage) {
     window.__stage.pause();
   }
+
+  if (slides[i].classList.contains('cover')) startCoverCycle(); else stopCoverCycle();
 }
 const next = () => go(idx + 1);
 const prev = () => go(idx - 1);
