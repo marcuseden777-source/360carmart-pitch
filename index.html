@@ -9,14 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,400..900&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
-  }
-}
-</script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
 
 <style>
 /* ============================================================================
@@ -305,6 +298,10 @@ svg.i{width:20px;height:20px;stroke:currentColor;stroke-width:1.7;fill:none;stro
 .contact svg{width:16px;height:16px}
 .editnote{margin-top:22px;font-size:11px;color:var(--bone-faint);letter-spacing:.04em}
 
+/* ── model-viewer web component ──────────────────────────────────────────── */
+model-viewer{display:block;width:100%;height:100%;background:transparent;
+  --poster-color:transparent;--progress-bar-color:var(--teal-glow);--progress-mask:transparent}
+
 /* misc */
 .under{color:var(--bone);border-bottom:1px solid rgba(56,216,196,.5);padding-bottom:1px}
 .foot-note{margin-top:22px;font-size:11.5px;color:var(--bone-faint);letter-spacing:.02em;max-width:60ch}
@@ -390,7 +387,7 @@ svg.i{width:20px;height:20px;stroke:currentColor;stroke-width:1.7;fill:none;stro
     <div class="hint" data-reveal style="--i:3">
       <div><kbd>←</kbd> <kbd>→</kbd> navigate</div>
       <div><kbd>F</kbd> fullscreen</div>
-      <div>drag the car to orbit</div>
+      <div>drag to spin · 360°</div>
     </div>
   </section>
 
@@ -649,11 +646,11 @@ let idx = 0;
 let curCar = 'ferrari';
 
 const CARS = {
-  ferrarif8:    { name:'Ferrari F8 Spider',   sub:'2020 · 3.9 V8 · multi-view capture', price:'S$1,288,000', url:'models/ferrari-f8-multiview-clean.glb' },
-  ferrari:      { name:'Ferrari Roma',        sub:'2022 · 3.9 V8 GT',     price:'S$1,108,000', url:'models/ferrari-roma-2022-opt.glb' },
-  lamborghini:  { name:'Lamborghini Huracán', sub:'2021 · 5.2 V10',       price:'S$998,000',   url:'models/lamborghini-huracan-evo-2021-opt.glb' },
-  porsche:      { name:'Porsche 911 Carrera', sub:'2019 · 992 PDK',       price:'S$498,000',   url:'models/porsche-911-carrera-2019-opt.glb' },
-  ioniq:        { name:'Hyundai Ioniq 5',     sub:'2023 · Long Range EV', price:'S$184,800',   url:'models/hyundai-ioniq-5-2023-opt.glb' },
+  ferrarif8:   { name:'Ferrari F8 Spider',    sub:'2020 · 3.9 V8 · multi-view capture', price:'S$1,288,000', type:'model', src:'models/ferrari-f8-multiview-clean.glb' },
+  ferrari:     { name:'Ferrari Roma',         sub:'2022 · 3.9 V8 GT',     price:'S$1,108,000', type:'model', src:'models/ferrari-roma-2022-opt.glb' },
+  lamborghini: { name:'Lamborghini Huracán',  sub:'2021 · 5.2 V10',       price:'S$998,000',   type:'model', src:'models/lamborghini-huracan-evo-2021-opt.glb' },
+  porsche:     { name:'Porsche 911 Carrera',  sub:'2019 · 992 PDK',       price:'S$498,000',   type:'video', src:'video/orbit-porsche-911-carrera-2019.mp4' },
+  ioniq:       { name:'Hyundai Ioniq 5',      sub:'2023 · Long Range EV', price:'S$184,800',   type:'video', src:'video/orbit-hyundai-ioniq-5-2023.mp4' },
 };
 
 ctot.textContent = '/ ' + String(slides.length).padStart(2, '0');
@@ -767,212 +764,131 @@ function runCount(el) {
 }
 
 /* ============================================================================
-   3D stage — faithful vanilla-Three.js port of car-3d-viewer.tsx
+   Hybrid viewer — mirrors the new embed system from the main 360CarMart app:
+   • SpinVideo (drag-to-spin orbit video) for cars with an .mp4 orbit clip
+   • model-viewer web component (CDN, no Three.js) for GLB-only cars
+   Porsche + Ioniq → orbit video  |  Ferrari · Lamborghini → model-viewer
    ========================================================================== */
-async function initThree() {
-  try {
-    const THREE = await import('three');
-    const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
-    const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-    let MeshoptDecoder = null;
-    try { ({ MeshoptDecoder } = await import('three/addons/libs/meshopt_decoder.module.js')); } catch (_) {}
+function initStage() {
+  let host = null, curEl = null, loadedKey = null, autoPlay = true;
 
-    const isMobile = window.matchMedia('(pointer:coarse)').matches || window.innerWidth < 768;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.18;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.domElement.className = 'r3d';
+  function setBusy(b) { if (host) host.classList.toggle('busy', b); }
+  function setErr(b)  { if (host) host.classList.toggle('err', b); }
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(30, 16 / 9, 0.1, 100);
-    camera.position.set(4.6, 1.7, 6.2);
-
-    // ── Studio IBL: a procedural softbox environment baked into a PMREM map.
-    //    The bright rectangles become the long highlight streaks that read as
-    //    real automotive-studio reflections raking across the car's body.
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    function buildStudioEnv() {
-      const s = new THREE.Scene();
-      s.add(new THREE.Mesh(new THREE.SphereGeometry(16, 32, 16),
-        new THREE.MeshBasicMaterial({ color: 0x3a4446, side: THREE.BackSide })));
-      const soft = (w, h, color, pos, rot) => {
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color }));
-        m.position.set(pos[0], pos[1], pos[2]);
-        if (rot) m.rotation.set(rot[0] || 0, rot[1] || 0, rot[2] || 0);
-        s.add(m);
-      };
-      soft(13, 3.2, 0xffffff, [0, 9, 0.5], [-Math.PI / 2, 0, 0]);  // overhead key softbox
-      soft(15, 5, 0xe8f4f2, [-8.5, 4, 0], [0, Math.PI / 2, 0]);     // long left strip
-      soft(15, 5, 0xe8f4f2, [8.5, 4, 0], [0, -Math.PI / 2, 0]);     // long right strip
-      soft(11, 4, 0xbfe9e2, [0, 4.5, -9], [0, 0, 0]);               // back rim fill
-      soft(5, 2.2, 0x4fe8d6, [4, 6.5, 6], [-0.6, 0.4, 0]);         // teal brand accent
-      const tex = pmrem.fromScene(s, 0.02).texture;
-      s.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
-      return tex;
+  function applyHints(kind) {
+    if (!host) return;
+    const oh = host.querySelector('.orbit-hint');
+    if (oh) oh.textContent = kind === 'video' ? 'drag to spin · 360°' : 'drag · scroll to zoom';
+    const bd = host.querySelector('.badge3d');
+    if (bd) {
+      bd.textContent = '';
+      const dot = document.createElement('span'); dot.className = 'live-dot';
+      bd.appendChild(dot);
+      bd.appendChild(document.createTextNode(kind === 'video' ? ' Live 360° · Drag to spin' : ' Live 3D'));
     }
-    scene.environment = buildStudioEnv();
-
-    // premium dark studio backdrop (vertical gradient, opaque)
-    scene.background = (() => {
-      const cv = document.createElement('canvas'); cv.width = 16; cv.height = 256;
-      const g = cv.getContext('2d'); const grd = g.createLinearGradient(0, 0, 0, 256);
-      grd.addColorStop(0, '#222c2e'); grd.addColorStop(0.55, '#141b1d'); grd.addColorStop(1, '#0a0e0f');
-      g.fillStyle = grd; g.fillRect(0, 0, 16, 256);
-      const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
-    })();
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-    const key = new THREE.DirectionalLight(0xffffff, 2.3);
-    key.position.set(5, 9, 5); key.castShadow = true;
-    key.shadow.mapSize.set(isMobile ? 1024 : 2048, isMobile ? 1024 : 2048);
-    key.shadow.camera.near = 1; key.shadow.camera.far = 40;
-    key.shadow.camera.left = -7; key.shadow.camera.right = 7;
-    key.shadow.camera.top = 7; key.shadow.camera.bottom = -7;
-    key.shadow.bias = -0.0004; key.shadow.radius = 4; scene.add(key);
-    const rim = new THREE.DirectionalLight(0x2bbfae, 0.9); rim.position.set(-6, 4, -5); scene.add(rim);
-    const fill = new THREE.DirectionalLight(0xeaf5f2, 0.35); fill.position.set(-4, 3, 6); scene.add(fill);
-
-    // Clearcoat upgrade: convert baked materials to physical car paint with strong IBL.
-    function upgradeMat(src) {
-      if (!src || !(src.isMeshStandardMaterial || src.isMeshPhysicalMaterial)) {
-        if (src && 'envMapIntensity' in src) src.envMapIntensity = 1.5;
-        return src;
-      }
-      const glossy = (src.metalness ?? 0) > 0.2 || (src.roughness ?? 1) < 0.5;
-      const p = new THREE.MeshPhysicalMaterial({
-        color: src.color ? src.color.clone() : new THREE.Color(0xffffff),
-        map: src.map || null, normalMap: src.normalMap || null,
-        roughnessMap: src.roughnessMap || null, metalnessMap: src.metalnessMap || null,
-        aoMap: src.aoMap || null, emissiveMap: src.emissiveMap || null,
-        emissive: src.emissive ? src.emissive.clone() : new THREE.Color(0x000000),
-        metalness: src.metalness ?? 0.0, roughness: src.roughness ?? 0.6,
-        transparent: !!src.transparent, opacity: src.opacity ?? 1,
-        alphaMap: src.alphaMap || null, side: src.side,
-      });
-      if (src.normalScale && p.normalScale) p.normalScale.copy(src.normalScale);
-      p.envMapIntensity = 1.85;
-      if (glossy) { p.clearcoat = 1.0; p.clearcoatRoughness = 0.08; if (p.roughness > 0.5) p.roughness = 0.4; }
-      if (src.dispose) src.dispose();
-      return p;
-    }
-
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(80, 80),
-      new THREE.MeshStandardMaterial({ color: 0x0a0e0f, metalness: 0.65, roughness: 0.34 })
-    );
-    floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
-
-    // soft contact-shadow blob under the car
-    const blob = (() => {
-      const cv = document.createElement('canvas'); cv.width = cv.height = 256;
-      const g = cv.getContext('2d');
-      const rg = g.createRadialGradient(128, 128, 8, 128, 128, 128);
-      rg.addColorStop(0, 'rgba(0,0,0,0.55)'); rg.addColorStop(0.55, 'rgba(0,0,0,0.22)'); rg.addColorStop(1, 'rgba(0,0,0,0)');
-      g.fillStyle = rg; g.fillRect(0, 0, 256, 256);
-      const tex = new THREE.CanvasTexture(cv);
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
-      m.rotation.x = -Math.PI / 2; m.position.y = 0.004; return m;
-    })();
-    scene.add(blob);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true; controls.dampingFactor = 0.08;
-    controls.enablePan = false; controls.autoRotate = true; controls.autoRotateSpeed = 0.9;
-    controls.target.set(0, 0.35, 0);
-    controls.minDistance = 2.6; controls.maxDistance = 9.5;
-    controls.minPolarAngle = 0.18; controls.maxPolarAngle = Math.PI / 2.05;
-    controls.saveState();
-
-    const loader = new GLTFLoader();
-    if (MeshoptDecoder) loader.setMeshoptDecoder(MeshoptDecoder);
-
-    let current = null, raf = 0, host = null, token = 0, loadedKey = null;
-    const tmpBox = new THREE.Box3(), tmpV = new THREE.Vector3();
-
-    function frame() { raf = requestAnimationFrame(frame); controls.update(); renderer.render(scene, camera); }
-    function start() { if (!raf) frame(); }
-    function stop() { if (raf) { cancelAnimationFrame(raf); raf = 0; } }
-    function resize() {
-      if (!host) return;
-      const r = host.getBoundingClientRect();
-      const w = Math.max(2, r.width | 0), h = Math.max(2, r.height | 0);
-      renderer.setSize(w, h, false);
-      camera.aspect = w / h; camera.updateProjectionMatrix();
-    }
-    const ro = new ResizeObserver(resize);
-    function setBusy(b) { if (host) host.classList.toggle('busy', b); }
-    function setErr(b) { if (host) host.classList.toggle('err', b); }
-
-    function disposeObj(obj) {
-      obj.traverse((o) => {
-        if (o.geometry) o.geometry.dispose();
-        if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose && m.dispose());
-      });
-    }
-
-    function load(k) {
-      const c = CARS[k] || CARS.ferrari;
-      const tok = ++token; setErr(false); setBusy(true);
-      loader.load(c.url, (g) => {
-        if (tok !== token) { disposeObj(g.scene); return; }
-        if (current) { scene.remove(current); disposeObj(current); current = null; }
-        const m = g.scene;
-        m.traverse((o) => {
-          if (!o.isMesh) return;
-          o.castShadow = true; o.receiveShadow = true;
-          const wasArray = Array.isArray(o.material);
-          const mats = wasArray ? o.material : [o.material];
-          const up = mats.map(upgradeMat);
-          o.material = wasArray ? up : up[0];
-        });
-        // normalise scale to a consistent footprint, then sit it on the floor
-        tmpBox.setFromObject(m); tmpBox.getSize(tmpV);
-        const maxH = Math.max(tmpV.x, tmpV.z) || 1;
-        m.scale.setScalar(3.0 / maxH);
-        tmpBox.setFromObject(m); tmpBox.getSize(tmpV);
-        const ctr = tmpBox.getCenter(new THREE.Vector3());
-        m.position.x -= ctr.x; m.position.z -= ctr.z; m.position.y -= tmpBox.min.y;
-        blob.scale.set(Math.max(tmpV.x, 1.3) * 0.62, Math.max(tmpV.z, 1.3) * 0.62, 1);
-        scene.add(m); current = m; loadedKey = k;
-        setBusy(false);
-      }, undefined, (err) => {
-        if (tok !== token) return;
-        console.warn('GLB load failed', c.url, err);
-        setBusy(false); setErr(true);
-      });
-    }
-
-    window.__stage = {
-      mount(h, k) {
-        if (host !== h) { if (host) ro.unobserve(host); host = h; h.appendChild(renderer.domElement); ro.observe(h); }
-        resize(); start();
-        if (k && k !== loadedKey) load(k);
-        else if (!current) load(k || 'ferrari');
-      },
-      pause() { stop(); },
-      load(k) { load(k); },
-      reset() { controls.reset(); },
-      toggleRotate() { controls.autoRotate = !controls.autoRotate; return controls.autoRotate; },
-    };
-
-    addEventListener('resize', resize);
-
-    // If we're already on a 3D slide, mount immediately.
-    const here = slides[idx].querySelector('[data-stage]');
-    if (here) window.__stage.mount(here, curCar);
-  } catch (err) {
-    console.warn('3D unavailable — falling back to posters', err);
-    document.body.classList.add('no3d');
   }
+
+  function createVideoSpin(src) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:absolute;inset:0;cursor:grab;touch-action:none;user-select:none;z-index:2;';
+    const v = document.createElement('video');
+    v.src = src; v.autoplay = true; v.loop = true; v.muted = true;
+    v.playsInline = true; v.preload = 'metadata';
+    v.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+    v.addEventListener('canplay', () => setBusy(false), { once: true });
+    v.addEventListener('error', () => { setBusy(false); setErr(true); });
+    const SENS = 1.4;
+    let drag = null;
+    wrap.addEventListener('pointerdown', e => {
+      if (!v.duration) return;
+      v.pause(); drag = { x: e.clientX, t: v.currentTime, dur: v.duration };
+      wrap.style.cursor = 'grabbing';
+      try { wrap.setPointerCapture(e.pointerId); } catch(_) {}
+    });
+    wrap.addEventListener('pointermove', e => {
+      if (!drag) return;
+      let t = (drag.t + ((e.clientX - drag.x) / (wrap.clientWidth || 1)) * SENS * drag.dur) % drag.dur;
+      if (t < 0) t += drag.dur;
+      v.currentTime = t;
+    });
+    const endDrag = () => {
+      if (!drag) return; drag = null;
+      wrap.style.cursor = 'grab';
+      if (autoPlay) v.play().catch(() => {});
+    };
+    wrap.addEventListener('pointerup', endDrag);
+    wrap.addEventListener('pointerleave', endDrag);
+    wrap.append(v);
+    wrap._v = v; wrap._kind = 'video'; return wrap;
+  }
+
+  function createModelViewer(src) {
+    const mv = document.createElement('model-viewer');
+    mv.setAttribute('src', src);
+    mv.setAttribute('camera-controls', '');
+    mv.setAttribute('auto-rotate', '');
+    mv.setAttribute('auto-rotate-delay', '0');
+    mv.setAttribute('rotation-per-second', '30deg');
+    mv.setAttribute('environment-image', 'neutral');
+    mv.setAttribute('exposure', '1.18');
+    mv.setAttribute('shadow-intensity', '1.5');
+    mv.setAttribute('shadow-softness', '1');
+    mv.setAttribute('camera-orbit', '30deg 75deg auto');
+    mv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;background:transparent;--poster-color:transparent;--progress-bar-color:#38d8c4;';
+    mv.addEventListener('load', () => setBusy(false), { once: true });
+    mv.addEventListener('error', () => { setBusy(false); setErr(true); });
+    mv._kind = 'model'; return mv;
+  }
+
+  function load(k) {
+    const c = CARS[k] || CARS.ferrari;
+    setBusy(true); setErr(false);
+    if (curEl) { curEl.remove(); curEl = null; }
+    const el = c.type === 'video' ? createVideoSpin(c.src) : createModelViewer(c.src);
+    if (host) host.insertBefore(el, host.firstChild);
+    curEl = el; loadedKey = k;
+    applyHints(c.type);
+  }
+
+  window.__stage = {
+    mount(h, k) {
+      if (host !== h) {
+        host = h;
+        if (curEl) { curEl.remove(); curEl = null; loadedKey = null; }
+        load(k || 'ferrari');
+      } else if (k && k !== loadedKey) {
+        load(k);
+      } else if (!curEl) {
+        load(k || 'ferrari');
+      } else if (curEl._kind === 'video' && autoPlay) {
+        curEl._v.play().catch(() => {});
+      }
+    },
+    pause() {
+      if (curEl && curEl._kind === 'video') curEl._v.pause();
+      else if (curEl && curEl._kind === 'model') curEl.removeAttribute('auto-rotate');
+    },
+    load(k) { if (host) load(k); },
+    reset() {
+      if (curEl && curEl._kind === 'model') { curEl.setAttribute('camera-orbit', '30deg 75deg auto'); }
+      else if (curEl && curEl._kind === 'video') { curEl._v.currentTime = 0; if (autoPlay) curEl._v.play().catch(() => {}); }
+    },
+    toggleRotate() {
+      autoPlay = !autoPlay;
+      if (curEl && curEl._kind === 'video') { autoPlay ? curEl._v.play().catch(() => {}) : curEl._v.pause(); }
+      else if (curEl && curEl._kind === 'model') { autoPlay ? curEl.setAttribute('auto-rotate','') : curEl.removeAttribute('auto-rotate'); }
+      return autoPlay;
+    },
+  };
+
+  const here = slides[idx].querySelector('[data-stage]');
+  if (here) window.__stage.mount(here, curCar);
+
 }
 
 /* Boot */
 go(0);
-initThree();
+initStage();
 </script>
 </body>
 </html>
