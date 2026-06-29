@@ -525,13 +525,14 @@ model-viewer{display:block;width:100%;height:100%;background:transparent;
         <div>
           <span class="kicker" data-reveal style="--i:0">The 3D inspection layer</span>
           <h2 data-reveal style="--i:1" style="margin:18px 0 14px">Walk around the car.<br/><span class="h-em">From anywhere.</span></h2>
-          <p class="lead" data-reveal style="--i:2">Tap a car below — the real model loads live, exactly as a buyer sees it on the listing. From a S$185k EV to a S$1.1m Ferrari, every car gets the same showroom.</p>
+          <p class="lead" data-reveal style="--i:2">Tap a car below — the real model loads live, exactly as a buyer sees it on the listing. From a S$228k Ferrari California to a S$1.13m F8 Spider, every prestige car gets the same showroom.</p>
           <div class="switch" data-reveal style="--i:3">
-            <button class="sw on" data-pick="ferrarif8"><span class="mk">Ferrari F8 Spider ✦</span><span class="pr">S$1,288,000</span></button>
+            <button class="sw on" data-pick="ferrarif8"><span class="mk">Ferrari F8 Spider ✦</span><span class="pr">S$1,130,000</span></button>
             <button class="sw" data-pick="ferrari"><span class="mk">Ferrari Roma</span><span class="pr">S$1,108,000</span></button>
             <button class="sw" data-pick="lamborghini"><span class="mk">Lamborghini Huracán</span><span class="pr">S$998,000</span></button>
-            <button class="sw" data-pick="porsche"><span class="mk">Porsche 911</span><span class="pr">S$498,000</span></button>
-            <button class="sw" data-pick="ioniq"><span class="mk">Hyundai Ioniq 5</span><span class="pr">S$184,800</span></button>
+            <button class="sw" data-pick="bentley"><span class="mk">Bentley GT V8</span><span class="pr">TBC</span></button>
+            <button class="sw" data-pick="f458"><span class="mk">Ferrari 458 Italia</span><span class="pr">S$338,000</span></button>
+            <button class="sw" data-pick="california"><span class="mk">Ferrari California</span><span class="pr">S$228,000</span></button>
           </div>
           <div class="callouts" data-reveal style="--i:4">
             <div class="callout"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="3"/></svg></span><div><b>Orbit &amp; zoom</b> — inspect every panel, wheel and shutline.</div></div>
@@ -686,11 +687,14 @@ let idx = 0;
 let curCar = 'ferrari';
 
 const CARS = {
-  ferrarif8:   { name:'Ferrari F8 Spider',    sub:'2020 · 3.9 V8 · multi-view capture', price:'S$1,288,000', type:'model', src:'models/ferrari-f8-multiview-clean.glb' },
-  ferrari:     { name:'Ferrari Roma',         sub:'2022 · 3.9 V8 GT',     price:'S$1,108,000', type:'model', src:'models/ferrari-roma-2022-opt.glb' },
-  lamborghini: { name:'Lamborghini Huracán',  sub:'2021 · 5.2 V10',       price:'S$998,000',   type:'model', src:'models/lamborghini-huracan-evo-2021-opt.glb' },
-  porsche:     { name:'Porsche 911 Carrera',  sub:'2019 · 992 PDK',       price:'S$498,000',   type:'video', src:'video/orbit-porsche-911-carrera-2019.mp4' },
-  ioniq:       { name:'Hyundai Ioniq 5',      sub:'2023 · Long Range EV', price:'S$184,800',   type:'video', src:'video/orbit-hyundai-ioniq-5-2023.mp4' },
+  ferrarif8:   { name:'Ferrari F8 Spider',      sub:'2021 · 3.9 V8 · 710 bhp · 1 owner',  price:'S$1,130,000', type:'video', src:'video/orbit-ferrari-f8-spider-2021.mp4' },
+  ferrari:     { name:'Ferrari Roma',            sub:'2022 · 3.9 V8 GT',                   price:'S$1,108,000', type:'model', src:'models/ferrari-roma-2022-opt.glb' },
+  lamborghini: { name:'Lamborghini Huracán',     sub:'2021 · 5.2 V10',                     price:'S$998,000',   type:'model', src:'models/lamborghini-huracan-evo-2021-opt.glb' },
+  bentley:     { name:'Bentley Continental GT',  sub:'2012 · 4.0 twin-turbo V8 · 500 bhp', price:'Price TBC',   type:'video', src:'video/orbit-bentley-continental-gt-v8-2012.mp4' },
+  f458:        { name:'Ferrari 458 Italia',      sub:'2011 · 4.5 NA V8 · 557 bhp',         price:'S$338,000',   type:'video', src:'video/orbit-ferrari-458-italia-2011.mp4' },
+  california:  { name:'Ferrari California',      sub:'2010 · 4.3 NA V8 · 453 bhp',         price:'S$228,000',   type:'video', src:'video/orbit-ferrari-california-2010.mp4' },
+  porsche:     { name:'Porsche 911 Carrera',     sub:'2019 · 992 PDK',                     price:'S$498,000',   type:'video', src:'video/orbit-porsche-911-carrera-2019.mp4' },
+  ioniq:       { name:'Hyundai Ioniq 5',         sub:'2023 · Long Range EV',                price:'S$184,800',   type:'video', src:'video/orbit-hyundai-ioniq-5-2023.mp4' },
 };
 
 ctot.textContent = '/ ' + String(slides.length).padStart(2, '0');
@@ -717,7 +721,7 @@ function applyCaption(slide) {
 }
 
 /* Cover hero: auto-cycle through the clean scans every 5s (F8 excluded — it scanned poorly). */
-const COVER_ROTATION = ['ferrari', 'lamborghini', 'porsche', 'ioniq'];
+const COVER_ROTATION = ['ferrarif8', 'ferrari', 'lamborghini', 'bentley', 'f458', 'california'];
 let coverTimer = null;
 function stopCoverCycle() { if (coverTimer) { clearInterval(coverTimer); coverTimer = null; } }
 function startCoverCycle() {
