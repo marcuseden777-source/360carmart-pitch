@@ -208,6 +208,11 @@ body.no3d .stage-fallback,.stage-host.err .stage-fallback{display:block}
   font-size:11px;color:var(--bone-faint);background:rgba(10,14,15,.55);border:1px solid var(--line-2);
   border-radius:999px;padding:6px 12px;backdrop-filter:blur(6px)}
 
+.variant-toggle{position:absolute;top:14px;right:14px;z-index:7;display:flex;gap:6px}
+.vt{background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.75);border-radius:999px;padding:5px 13px;font-size:11px;cursor:pointer;backdrop-filter:blur(8px);transition:background .15s,border-color .15s,color .15s}
+.vt.on{background:var(--teal-bright);border-color:var(--teal-bright);color:#000;font-weight:600}
+.vt:not(.on):hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.35);color:#fff}
+
 /* ── Layout primitives ────────────────────────────────────────────────────── */
 .split{display:grid;grid-template-columns:1.04fr .96fr;gap:clamp(28px,4.4vw,72px);align-items:center}
 .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
@@ -521,6 +526,10 @@ model-viewer{display:block;width:100%;height:100%;background:transparent;
             <button data-3d="reset"><svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-7 3.3M3 4v5h5"/></svg> Reset</button>
           </div>
           <span class="orbit-hint"><svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="4"/></svg> drag · scroll to zoom</span>
+          <div id="variantToggle" class="variant-toggle" style="display:none">
+            <button class="vt on" data-variant="closed">Closed</button>
+            <button class="vt" data-variant="open">Open</button>
+          </div>
         </div>
         <div>
           <span class="kicker" data-reveal style="--i:0">The 3D inspection layer</span>
@@ -685,14 +694,15 @@ const cnum = document.getElementById('cnum');
 const ctot = document.getElementById('ctot');
 let idx = 0;
 let curCar = 'ferrari';
+let curVariant = 'closed';
 
 const CARS = {
-  ferrarif8:   { name:'Ferrari F8 Spider',      sub:'2021 · 3.9 V8 · 710 bhp · 1 owner',  price:'S$1,130,000', type:'video', src:'video/orbit-ferrari-f8-spider-2021.mp4' },
+  ferrarif8:   { name:'Ferrari F8 Spider',      sub:'2021 · 3.9 V8 · 710 bhp · 1 owner',  price:'S$1,130,000', type:'video', src:'video/orbit-ferrari-f8-spider-2021.mp4',     open:'video/orbit-ferrari-f8-spider-2021-open.mp4' },
   ferrari:     { name:'Ferrari Roma',            sub:'2022 · 3.9 V8 GT',                   price:'S$1,108,000', type:'model', src:'models/ferrari-roma-2022-opt.glb' },
   lamborghini: { name:'Lamborghini Huracán',     sub:'2021 · 5.2 V10',                     price:'S$998,000',   type:'model', src:'models/lamborghini-huracan-evo-2021-opt.glb' },
   bentley:     { name:'Bentley Continental GT',  sub:'2012 · 4.0 twin-turbo V8 · 500 bhp', price:'Price TBC',   type:'video', src:'video/orbit-bentley-continental-gt-v8-2012.mp4' },
-  f458:        { name:'Ferrari 458 Italia',      sub:'2011 · 4.5 NA V8 · 557 bhp',         price:'S$338,000',   type:'video', src:'video/orbit-ferrari-458-italia-2011.mp4' },
-  california:  { name:'Ferrari California',      sub:'2010 · 4.3 NA V8 · 453 bhp',         price:'S$228,000',   type:'video', src:'video/orbit-ferrari-california-2010.mp4' },
+  f458:        { name:'Ferrari 458 Italia',      sub:'2011 · 4.5 NA V8 · 557 bhp',         price:'S$338,000',   type:'video', src:'video/orbit-ferrari-458-italia-2011.mp4',      open:'video/orbit-ferrari-458-italia-2011-open.mp4' },
+  california:  { name:'Ferrari California',      sub:'2010 · 4.3 NA V8 · 453 bhp',         price:'S$228,000',   type:'video', src:'video/orbit-ferrari-california-2010.mp4',      open:'video/orbit-ferrari-california-2010-open.mp4' },
   porsche:     { name:'Porsche 911 Carrera',     sub:'2019 · 992 PDK',                     price:'S$498,000',   type:'video', src:'video/orbit-porsche-911-carrera-2019.mp4' },
   ioniq:       { name:'Hyundai Ioniq 5',         sub:'2023 · Long Range EV',                price:'S$184,800',   type:'video', src:'video/orbit-hyundai-ioniq-5-2023.mp4' },
 };
@@ -759,10 +769,12 @@ function go(i) {
 const next = () => go(idx + 1);
 const prev = () => go(idx - 1);
 
-/* Car switcher + 3D control buttons (event delegation) */
+/* Car switcher + variant toggle + 3D control buttons (event delegation) */
 document.addEventListener('click', (e) => {
   const pick = e.target.closest('[data-pick]');
-  if (pick) { curCar = pick.dataset.pick; if (window.__stage) window.__stage.load(curCar); applyCaption(slides[idx]); return; }
+  if (pick) { curCar = pick.dataset.pick; curVariant = 'closed'; if (window.__stage) window.__stage.load(curCar); applyCaption(slides[idx]); return; }
+  const vbtn = e.target.closest('[data-variant]');
+  if (vbtn) { curVariant = vbtn.dataset.variant; if (window.__stage) window.__stage.load(curCar); return; }
   const ctl = e.target.closest('[data-3d]');
   if (ctl && window.__stage) {
     if (ctl.dataset['3d'] === 'rotate') window.__stage.toggleRotate();
@@ -884,14 +896,24 @@ function initStage() {
     mv._kind = 'model'; return mv;
   }
 
+  function updateVariantToggle(k) {
+    const vt = document.getElementById('variantToggle');
+    if (!vt) return;
+    const c = CARS[k];
+    vt.style.display = (c && c.open) ? 'flex' : 'none';
+    vt.querySelectorAll('.vt').forEach(b => b.classList.toggle('on', b.dataset.variant === curVariant));
+  }
+
   function load(k) {
     const c = CARS[k] || CARS.ferrari;
+    const src = (curVariant === 'open' && c.open) ? c.open : c.src;
     setBusy(true); setErr(false);
     if (curEl) { curEl.remove(); curEl = null; }
-    const el = c.type === 'video' ? createVideoSpin(c.src) : createModelViewer(c.src);
+    const el = c.type === 'video' ? createVideoSpin(src) : createModelViewer(src);
     if (host) host.insertBefore(el, host.firstChild);
     curEl = el; loadedKey = k;
     applyHints(c.type);
+    updateVariantToggle(k);
   }
 
   window.__stage = {
